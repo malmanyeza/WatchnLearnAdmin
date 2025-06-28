@@ -1,5 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 
 export const metadata: Metadata = {
@@ -15,9 +17,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AdminLayout>
-          {children}
-        </AdminLayout>
+        <AuthProvider>
+          <ProtectedRoute>
+            <AdminLayout>
+              {children}
+            </AdminLayout>
+          </ProtectedRoute>
+        </AuthProvider>
       </body>
     </html>
   );
