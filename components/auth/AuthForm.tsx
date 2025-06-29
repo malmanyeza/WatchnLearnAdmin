@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { GraduationCap, Loader2, AlertCircle } from 'lucide-react';
+import { GraduationCap, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 
 export function AuthForm() {
   const { signIn, signUp, loading } = useAuth();
@@ -72,10 +72,20 @@ export function AuthForm() {
     try {
       console.log('Attempting sign up with:', signUpData.email);
       await signUp(signUpData.email, signUpData.password, signUpData.fullName);
+      setSuccess('Account created successfully! You are now being logged in...');
+      setSignUpData({ fullName: '', email: '', password: '', confirmPassword: '' });
       // Success - user will be automatically logged in and redirected
     } catch (err: any) {
       console.error('Sign up error:', err);
-      setError(err.message || 'Failed to create account');
+      
+      // Handle specific signup errors
+      if (err.message.includes('User already registered')) {
+        setError('An account with this email already exists. Please try signing in instead.');
+      } else if (err.message.includes('Password should be at least 6 characters')) {
+        setError('Password must be at least 6 characters long.');
+      } else {
+        setError(err.message || 'Failed to create account. Please try again.');
+      }
     }
   };
 
@@ -113,7 +123,7 @@ export function AuthForm() {
 
               {success && (
                 <Alert className="border-green-200 bg-green-50 text-green-800">
-                  <AlertCircle className="h-4 w-4" />
+                  <CheckCircle className="h-4 w-4" />
                   <AlertDescription>{success}</AlertDescription>
                 </Alert>
               )}
@@ -224,6 +234,9 @@ export function AuthForm() {
 
         <div className="text-center mt-6 text-sm text-gray-600">
           <p>© 2024 WatchnLearn. All rights reserved.</p>
+          <p className="mt-2 text-xs">
+            Note: Email confirmation is disabled for admin accounts
+          </p>
         </div>
       </div>
     </div>
