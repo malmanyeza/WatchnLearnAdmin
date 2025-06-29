@@ -41,6 +41,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-gray-600">Setting up your profile...</p>
+          <p className="text-sm text-gray-500 mt-2">This may take a few moments for new accounts</p>
         </div>
       </div>
     );
@@ -54,12 +55,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">You don't have permission to access the admin dashboard.</p>
           <p className="text-sm text-gray-500 mb-4">Current role: {profile.role}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-primary hover:underline"
-          >
-            Try again
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="block mx-auto text-primary hover:underline"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={() => {
+                // Sign out and redirect to login
+                window.location.href = '/';
+              }}
+              className="block mx-auto text-gray-500 hover:underline text-sm"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -12,61 +12,112 @@ export interface AuthUser extends User {
 export const auth = {
   // Sign up with email and password
   signUp: async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+          // Disable email confirmation for admin system
+          emailRedirectTo: undefined,
         },
-        // Disable email confirmation for admin system
-        emailRedirectTo: undefined,
-      },
-    });
+      });
 
-    if (error) {
-      console.error('Signup error:', error);
+      if (error) {
+        console.error('Signup error:', error);
+        throw error;
+      }
+
+      console.log('Signup response:', data);
+
+      // Check if user was created
+      if (!data || !data.user) {
+        throw new Error('Failed to create user account');
+      }
+
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Manually create profile if trigger didn't work
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!existingProfile) {
+          console.log('Creating profile manually for user:', data.user.id);
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: data.user.email!,
+              full_name: fullName,
+              role: 'admin', // Default role for admin system
+            });
+
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+            // Don't throw here, as the user was created successfully
+          }
+        }
+      } catch (profileCheckError) {
+        console.error('Error checking/creating profile:', profileCheckError);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Auth signup error:', error);
       throw error;
     }
-
-    // The profile will be created automatically by the trigger
-    // No need to manually create it here since the trigger handles it
-
-    return data;
   },
 
   // Sign in with email and password
   signIn: async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      console.error('Signin error:', error);
-      
-      // Handle specific error cases
-      if (error.message.includes('Email not confirmed')) {
-        // For admin system, we'll automatically confirm the email
-        throw new Error('Account not activated. Please contact your administrator.');
+      if (error) {
+        console.error('Signin error:', error);
+        
+        // Handle specific error cases
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('Account not activated. Please contact your administrator.');
+        }
+        
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password. Please check your credentials.');
+        }
+        
+        throw error;
       }
-      
-      if (error.message.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password. Please check your credentials.');
+
+      console.log('Signin response:', data);
+
+      // Update last login if user exists
+      if (data.user) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ last_login: new Date().toISOString() })
+            .eq('id', data.user.id);
+        } catch (updateError) {
+          console.error('Error updating last login:', updateError);
+          // Don't throw, as signin was successful
+        }
       }
-      
+
+      return data;
+    } catch (error) {
+      console.error('Auth signin error:', error);
       throw error;
     }
-
-    // Update last login
-    if (data.user) {
-      await supabase
-        .from('profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.user.id);
-    }
-
-    return data;
   },
 
   // Sign out
@@ -82,19 +133,53 @@ export const auth = {
     return user;
   },
 
-  // Get user profile
+  // Get user profile with better error handling
   getUserProfile: async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
+      if (error) {
+        console.error('Error fetching profile:', error);
+        
+        // If profile doesn't exist, try to create it
+        if (error.code === 'PGRST116') { // No rows returned
+          console.log('Profile not found, attempting to create...');
+          
+          // Get user info from auth
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user && user.id === userId) {
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userId,
+                email: user.email!,
+                full_name: user.user_metadata?.full_name || '',
+                role: 'admin',
+              })
+              .select()
+              .single();
+
+            if (createError) {
+              console.error('Error creating profile:', createError);
+              return null;
+            }
+
+            return newProfile;
+          }
+        }
+        
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error in getUserProfile:', error);
       return null;
     }
-    return data;
   },
 
   // Update user profile
@@ -116,25 +201,17 @@ export const auth = {
 
   // Check if user is admin
   isAdmin: async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
-
-    if (error) return false;
-    return data.role === 'admin' || data.role === 'super_admin';
-  },
-
-  // Manually confirm user email (for admin use)
-  confirmUserEmail: async (userId: string) => {
     try {
-      // This would typically be done through Supabase admin API
-      // For now, we'll handle it in the application logic
-      console.log('Email confirmation would be handled here for user:', userId);
-      return true;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (error) return false;
+      return data.role === 'admin' || data.role === 'super_admin';
     } catch (error) {
-      console.error('Error confirming email:', error);
+      console.error('Error checking admin status:', error);
       return false;
     }
   },
