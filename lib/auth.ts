@@ -24,19 +24,8 @@ export const auth = {
 
     if (error) throw error;
 
-    // Create profile after successful signup
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName,
-          role: 'admin', // Default role for admin system
-        });
-
-      if (profileError) throw profileError;
-    }
+    // Profile creation is handled automatically by the database trigger
+    // No need to manually insert into profiles table
 
     return data;
   },
