@@ -20,12 +20,9 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
   const [formData, setFormData] = useState({
     subject: '',
     year: new Date().getFullYear(),
-    month: '',
     paperType: '',
     level: '',
     examBoard: '',
-    duration: '',
-    totalMarks: '',
     description: '',
     hasMarkingScheme: false,
     file: null as File | null,
@@ -36,10 +33,6 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
   const levels = ['JC', 'O-Level', 'A-Level'];
   const examBoards = ['ZIMSEC', 'Cambridge'];
   const paperTypes = ['Paper 1', 'Paper 2', 'Paper 3', 'Paper 4', 'Practical'];
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 20 }, (_, i) => currentYear - i);
@@ -51,12 +44,9 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
       id: Date.now(),
       subject: formData.subject,
       year: formData.year,
-      month: formData.month,
       paperType: formData.paperType,
       level: formData.level,
       examBoard: formData.examBoard,
-      duration: formData.duration,
-      totalMarks: parseInt(formData.totalMarks),
       description: formData.description,
       status: 'published',
       downloadCount: 0,
@@ -74,12 +64,9 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
     setFormData({
       subject: '',
       year: new Date().getFullYear(),
-      month: '',
       paperType: '',
       level: '',
       examBoard: '',
-      duration: '',
-      totalMarks: '',
       description: '',
       hasMarkingScheme: false,
       file: null,
@@ -127,21 +114,7 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="month">Month *</Label>
-              <Select value={formData.month} onValueChange={(value) => setFormData(prev => ({ ...prev, month: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map(month => (
-                    <SelectItem key={month} value={month}>{month}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="paperType">Paper Type *</Label>
               <Select value={formData.paperType} onValueChange={(value) => setFormData(prev => ({ ...prev, paperType: value }))}>
@@ -155,9 +128,7 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="level">Level *</Label>
               <Select value={formData.level} onValueChange={(value) => setFormData(prev => ({ ...prev, level: value }))}>
@@ -184,32 +155,6 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration *</Label>
-              <Input
-                id="duration"
-                value={formData.duration}
-                onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
-                placeholder="e.g., 2 hours 30 minutes"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="totalMarks">Total Marks *</Label>
-              <Input
-                id="totalMarks"
-                type="number"
-                min="1"
-                value={formData.totalMarks}
-                onChange={(e) => setFormData(prev => ({ ...prev, totalMarks: e.target.value }))}
-                placeholder="e.g., 100"
-                required
-              />
             </div>
           </div>
 
@@ -295,7 +240,7 @@ export function AddPastPaperDialog({ trigger, onPaperAdded }: AddPastPaperDialog
             </Button>
             <Button 
               type="submit" 
-              disabled={!formData.subject || !formData.paperType || !formData.level || !formData.examBoard || !formData.month || !formData.duration || !formData.totalMarks || !formData.file}
+              disabled={!formData.subject || !formData.paperType || !formData.level || !formData.examBoard || !formData.file}
             >
               Add Past Paper
             </Button>
