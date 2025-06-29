@@ -20,8 +20,6 @@ export const auth = {
           data: {
             full_name: fullName,
           },
-          // Disable email confirmation for admin system
-          emailRedirectTo: undefined,
         },
       });
 
@@ -35,37 +33,6 @@ export const auth = {
       // Check if user was created
       if (!data || !data.user) {
         throw new Error('Failed to create user account');
-      }
-
-      // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Manually create profile if trigger didn't work
-      try {
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', data.user.id)
-          .single();
-
-        if (!existingProfile) {
-          console.log('Creating profile manually for user:', data.user.id);
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: data.user.id,
-              email: data.user.email!,
-              full_name: fullName,
-              role: 'admin', // Default role for admin system
-            });
-
-          if (profileError) {
-            console.error('Error creating profile:', profileError);
-            // Don't throw here, as the user was created successfully
-          }
-        }
-      } catch (profileCheckError) {
-        console.error('Error checking/creating profile:', profileCheckError);
       }
 
       return data;
@@ -140,38 +107,10 @@ export const auth = {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching profile:', error);
-        
-        // If profile doesn't exist, try to create it
-        if (error.code === 'PGRST116') { // No rows returned
-          console.log('Profile not found, attempting to create...');
-          
-          // Get user info from auth
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user && user.id === userId) {
-            const { data: newProfile, error: createError } = await supabase
-              .from('profiles')
-              .insert({
-                id: userId,
-                email: user.email!,
-                full_name: user.user_metadata?.full_name || '',
-                role: 'admin',
-              })
-              .select()
-              .single();
-
-            if (createError) {
-              console.error('Error creating profile:', createError);
-              return null;
-            }
-
-            return newProfile;
-          }
-        }
-        
         return null;
       }
       

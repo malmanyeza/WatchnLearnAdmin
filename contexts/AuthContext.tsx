@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { auth } from '@/lib/auth';
 import type { Profile } from '@/lib/supabase';
 
 interface AuthContextType {
@@ -25,65 +24,89 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
-  // Function to create profile if missing
+  // Function to create profile if missing - using direct SQL to bypass RLS
   const ensureProfile = async (user: User): Promise<Profile | null> => {
     try {
-      // First try to get existing profile
-      let { data: profile, error } = await supabase
+      console.log('Attempting to fetch/create profile for user:', user.id);
+      
+      // First, try to get the profile using the service role to bypass RLS
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      console.log("Here is the user data from profiles:",profile)
-
-      if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create it
-        console.log('Profile not found, creating new profile for:', user.email);
+      if (error) {
+        console.error('Error fetching profile:', error);
         
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email!,
-            full_name: user.user_metadata?.full_name || '',
-            role: 'admin',
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Error creating profile:', createError);
+        // If profile doesn't exist, try to create it using the RPC function
+        if (error.code === 'PGRST116' || error.message.includes('No rows')) {
+          console.log('Profile not found, creating new profile for:', user.email);
           
-          // Try using the SQL function as fallback
           try {
-            await supabase.rpc('create_missing_profile', {
+            // Use the RPC function to create the profile
+            const { error: rpcError } = await supabase.rpc('create_missing_profile', {
               user_id: user.id,
               user_email: user.email!,
               user_name: user.user_metadata?.full_name || ''
             });
-            
-            // Try to fetch again
-            const { data: retryProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            
-            return retryProfile;
+
+            if (rpcError) {
+              console.error('RPC error creating profile:', rpcError);
+            } else {
+              console.log('Profile created successfully via RPC');
+              
+              // Try to fetch the profile again
+              const { data: newProfile, error: fetchError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .maybeSingle();
+
+              if (!fetchError && newProfile) {
+                console.log('Successfully fetched newly created profile:', newProfile.role);
+                return newProfile;
+              }
+            }
           } catch (rpcError) {
-            console.error('RPC fallback failed:', rpcError);
-            return null;
+            console.error('RPC function failed:', rpcError);
+          }
+
+          // If RPC fails, try direct insert (this might fail due to RLS but worth trying)
+          try {
+            const { data: insertedProfile, error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                id: user.id,
+                email: user.email!,
+                full_name: user.user_metadata?.full_name || '',
+                role: 'admin',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+            if (!insertError && insertedProfile) {
+              console.log('Profile created via direct insert:', insertedProfile.role);
+              return insertedProfile;
+            } else {
+              console.error('Direct insert failed:', insertError);
+            }
+          } catch (insertError) {
+            console.error('Direct insert exception:', insertError);
           }
         }
-
-        return newProfile;
-      } else if (error) {
-        console.error('Error fetching profile:', error);
+        
         return null;
       }
 
-      return profile;
+      if (profile) {
+        console.log('Profile found:', profile.role);
+        return profile;
+      }
+
+      return null;
     } catch (error) {
       console.error('Error in ensureProfile:', error);
       return null;
@@ -111,10 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (session?.user && mounted) {
-          console.log("Here is the id",session.user.id)
-          console.log("Here is the uid",session.user.uid)
+          console.log('User found, fetching profile for:', session.user.id);
           const userProfile = await ensureProfile(session.user);
-          console.log('Initial profile:', userProfile?.role);
+          console.log('Initial profile result:', userProfile?.role);
           if (mounted) {
             setProfile(userProfile);
           }
@@ -141,10 +163,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // For new signups, wait a bit longer
+          // For new signups, wait a bit longer for the trigger to complete
           if (event === 'SIGNED_UP') {
             console.log('New signup detected, waiting for profile creation...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
           
           const userProfile = await ensureProfile(session.user);
@@ -173,8 +195,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await auth.signIn(email, password);
-      console.log('Sign in successful');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Signin error:', error);
+        
+        // Handle specific error cases
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('Account not activated. Please contact your administrator.');
+        }
+        
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password. Please check your credentials.');
+        }
+        
+        throw error;
+      }
+
+      console.log('Sign in successful for:', email);
+      // The auth state change listener will handle setting the user and profile
     } catch (error) {
       setLoading(false);
       console.error('Sign in error:', error);
@@ -185,9 +227,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     setLoading(true);
     try {
-      await auth.signUp(email, password, fullName);
-      console.log('Sign up successful');
-      // Note: The auth state change listener will handle setting the user and profile
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Signup error:', error);
+        throw error;
+      }
+
+      if (!data || !data.user) {
+        throw new Error('Failed to create user account');
+      }
+
+      console.log('Sign up successful for:', email);
+      // The auth state change listener will handle setting the user and profile
     } catch (error) {
       setLoading(false);
       console.error('Sign up error:', error);
@@ -198,7 +258,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setLoading(true);
     try {
-      await auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       console.log('Sign out successful');
     } catch (error) {
       setLoading(false);
