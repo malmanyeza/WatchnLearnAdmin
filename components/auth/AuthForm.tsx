@@ -34,10 +34,18 @@ export function AuthForm() {
     setError(null);
     setSuccess(null);
 
+    if (!signInData.email || !signInData.password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
     try {
+      console.log('Attempting sign in with:', signInData.email);
       await signIn(signInData.email, signInData.password);
+      // Success - user will be redirected by ProtectedRoute
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      console.error('Sign in error:', err);
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
     }
   };
 
@@ -45,6 +53,11 @@ export function AuthForm() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (!signUpData.fullName || !signUpData.email || !signUpData.password || !signUpData.confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
 
     if (signUpData.password !== signUpData.confirmPassword) {
       setError('Passwords do not match');
@@ -57,10 +70,11 @@ export function AuthForm() {
     }
 
     try {
+      console.log('Attempting sign up with:', signUpData.email);
       await signUp(signUpData.email, signUpData.password, signUpData.fullName);
-      setSuccess('Account created successfully! Please check your email to verify your account.');
-      setSignUpData({ fullName: '', email: '', password: '', confirmPassword: '' });
+      // Success - user will be automatically logged in and redirected
     } catch (err: any) {
+      console.error('Sign up error:', err);
       setError(err.message || 'Failed to create account');
     }
   };

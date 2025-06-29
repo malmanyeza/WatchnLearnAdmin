@@ -24,19 +24,8 @@ export const auth = {
 
     if (error) throw error;
 
-    // Create profile after successful signup
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName,
-          role: 'admin', // Default role for admin system
-        });
-
-      if (profileError) throw profileError;
-    }
+    // The profile will be created automatically by the trigger
+    // No need to manually create it here since the trigger handles it
 
     return data;
   },
@@ -82,7 +71,10 @@ export const auth = {
       .eq('id', userId)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return null;
+    }
     return data;
   },
 
