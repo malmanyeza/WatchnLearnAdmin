@@ -117,7 +117,7 @@ export function AddSubjectDialog({ trigger, onSubjectAdded }: AddSubjectDialogPr
           description: formData.description,
           level: formData.level as 'JC' | 'O-Level' | 'A-Level',
           exam_board: examBoard as 'ZIMSEC' | 'Cambridge',
-          school_id: formData.school_id || undefined,
+          school_id: formData.school_id === 'none' ? undefined : formData.school_id || undefined,
           teachers: formData.teachers,
         };
 
@@ -218,7 +218,7 @@ export function AddSubjectDialog({ trigger, onSubjectAdded }: AddSubjectDialogPr
                 <SelectValue placeholder="Select school (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No specific school</SelectItem>
+                <SelectItem value="none">No specific school</SelectItem>
                 {schools.map(school => (
                   <SelectItem key={school.id} value={school.id}>{school.name}</SelectItem>
                 ))}
