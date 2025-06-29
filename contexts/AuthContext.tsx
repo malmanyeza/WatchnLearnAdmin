@@ -35,6 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', user.id)
         .single();
 
+      console.log("Here is the user data from profiles:",profile)
+
       if (error && error.code === 'PGRST116') {
         // Profile doesn't exist, create it
         console.log('Profile not found, creating new profile for:', user.email);
