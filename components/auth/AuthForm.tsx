@@ -37,7 +37,6 @@ export function AuthForm() {
     try {
       await signIn(signInData.email, signInData.password);
     } catch (err: any) {
-      console.error('Sign in error:', err);
       setError(err.message || 'Failed to sign in');
     }
   };
@@ -62,28 +61,7 @@ export function AuthForm() {
       setSuccess('Account created successfully! Please check your email to verify your account.');
       setSignUpData({ fullName: '', email: '', password: '', confirmPassword: '' });
     } catch (err: any) {
-      console.error('Sign up error:', err);
-      
-      // Handle specific Supabase error messages
-      let errorMessage = 'Failed to create account';
-      
-      if (err.message) {
-        if (err.message.includes('User already registered')) {
-          errorMessage = 'An account with this email already exists';
-        } else if (err.message.includes('Invalid email')) {
-          errorMessage = 'Please enter a valid email address';
-        } else if (err.message.includes('Password should be at least')) {
-          errorMessage = 'Password must be at least 6 characters long';
-        } else if (err.message.includes('signup is disabled')) {
-          errorMessage = 'Account registration is currently disabled';
-        } else if (err.message.includes('Email rate limit exceeded')) {
-          errorMessage = 'Too many signup attempts. Please try again later';
-        } else {
-          errorMessage = err.message;
-        }
-      }
-      
-      setError(errorMessage);
+      setError(err.message || 'Failed to create account');
     }
   };
 
