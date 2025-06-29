@@ -136,7 +136,7 @@ export default function TextbooksPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-gray-900">{textbooks.length}</div>
@@ -158,17 +158,6 @@ export default function TextbooksPage() {
             </div>
             <div className="text-sm text-gray-600">Publishers</div>
             <div className="text-xs text-gray-500 mt-1">Trusted sources</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {new Date().getFullYear() - Math.min(...textbooks.map(book => book.year)) + 1}
-            </div>
-            <div className="text-sm text-gray-600">Years Range</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {Math.min(...textbooks.map(book => book.year))} - {Math.max(...textbooks.map(book => book.year))}
-            </div>
           </CardContent>
         </Card>
       </div>
