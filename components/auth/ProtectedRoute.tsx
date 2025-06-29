@@ -2,7 +2,8 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthForm } from './AuthForm';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -35,13 +36,25 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!profile) {
-    console.log('User found but no profile, showing loading...');
+    console.log('User found but no profile, showing profile setup...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
+        <div className="text-center max-w-md mx-auto p-6">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-gray-600">Setting up your profile...</p>
-          <p className="text-sm text-gray-500 mt-2">This may take a few moments for new accounts</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Setting up your profile...</h2>
+          <p className="text-gray-600 mb-4">This may take a few moments for new accounts</p>
+          <div className="text-sm text-gray-500 space-y-2">
+            <p>User: {user.email}</p>
+            <p>If this takes too long, try refreshing the page.</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.reload()}
+            className="mt-4"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Page
+          </Button>
         </div>
       </div>
     );

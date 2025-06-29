@@ -25,7 +25,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
+  // Function to create profile if missing
+  const ensureProfile = async (user: User): Promise<Profile | null> => {
+    try {
+      // First try to get existing profile
+      let { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Profile doesn't exist, create it
+        console.log('Profile not found, creating new profile for:', user.email);
+        
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email!,
+            full_name: user.user_metadata?.full_name || '',
+            role: 'admin',
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          
+          // Try using the SQL function as fallback
+          try {
+            await supabase.rpc('create_missing_profile', {
+              user_id: user.id,
+              user_email: user.email!,
+              user_name: user.user_metadata?.full_name || ''
+            });
+            
+            // Try to fetch again
+            const { data: retryProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            
+            return retryProfile;
+          } catch (rpcError) {
+            console.error('RPC fallback failed:', rpcError);
+            return null;
+          }
+        }
+
+        return newProfile;
+      } else if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+
+      return profile;
+    } catch (error) {
+      console.error('Error in ensureProfile:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
     const getInitialSession = async () => {
       try {
@@ -33,23 +98,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (error) {
           console.error('Error getting session:', error);
-          setLoading(false);
+          if (mounted) setLoading(false);
           return;
         }
 
         console.log('Initial session:', session?.user?.email);
-        setUser(session?.user ?? null);
         
-        if (session?.user) {
-          const userProfile = await auth.getUserProfile(session.user.id);
-          console.log('Initial profile:', userProfile?.role);
-          setProfile(userProfile);
+        if (mounted) {
+          setUser(session?.user ?? null);
         }
         
-        setLoading(false);
+        if (session?.user && mounted) {
+          const userProfile = await ensureProfile(session.user);
+          console.log('Initial profile:', userProfile?.role);
+          if (mounted) {
+            setProfile(userProfile);
+          }
+        }
+        
+        if (mounted) {
+          setLoading(false);
+        }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
@@ -60,27 +132,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         
+        if (!mounted) return;
+        
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Wait a bit for the trigger to create the profile for new signups
+          // For new signups, wait a bit longer
           if (event === 'SIGNED_UP') {
             console.log('New signup detected, waiting for profile creation...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
           
-          const userProfile = await auth.getUserProfile(session.user.id);
+          const userProfile = await ensureProfile(session.user);
           console.log('Profile after auth change:', userProfile?.role);
-          setProfile(userProfile);
+          if (mounted) {
+            setProfile(userProfile);
+          }
         } else {
-          setProfile(null);
+          if (mounted) {
+            setProfile(null);
+          }
         }
         
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
