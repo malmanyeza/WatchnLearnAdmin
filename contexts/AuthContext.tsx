@@ -111,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (session?.user && mounted) {
+          console.log("Here is the id",session.user.id)
+          console.log("Here is the uid",session.user.uid)
           const userProfile = await ensureProfile(session.user);
           console.log('Initial profile:', userProfile?.role);
           if (mounted) {
