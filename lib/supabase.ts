@@ -5,7 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Database types
+// Enhanced Database types to match the updated schema
 export interface Profile {
   id: string;
   email: string;
@@ -42,8 +42,57 @@ export interface Subject {
   school_id?: string;
   icon: string;
   is_active: boolean;
+  enrolled_students: number;
+  content_items: number;
+  completion_rate: number;
   created_at: string;
   updated_at: string;
+  // Relations
+  terms?: Term[];
+  subject_teachers?: SubjectTeacher[];
+}
+
+export interface SubjectTeacher {
+  id: string;
+  subject_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  qualification?: string;
+  created_at: string;
+}
+
+export interface Term {
+  id: string;
+  subject_id: string;
+  title: string;
+  order_number: number;
+  created_at: string;
+  // Relations
+  weeks?: Week[];
+}
+
+export interface Week {
+  id: string;
+  term_id: string;
+  title: string;
+  order_number: number;
+  created_at: string;
+  // Relations
+  chapters?: Chapter[];
+}
+
+export interface Chapter {
+  id: string;
+  week_id: string;
+  title: string;
+  description?: string;
+  order_number: number;
+  is_continuation: boolean;
+  original_chapter_id?: string;
+  created_at: string;
+  // Relations
+  content?: Content[];
 }
 
 export interface Content {
@@ -63,6 +112,29 @@ export interface Content {
   created_by?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserEnrollment {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  enrolled_at: string;
+  is_active: boolean;
+  // Relations
+  subject?: Subject;
+  profile?: Profile;
+}
+
+export interface UserProgress {
+  id: string;
+  user_id: string;
+  content_id: string;
+  progress_percentage: number;
+  completed_at?: string;
+  last_accessed: string;
+  // Relations
+  content?: Content;
+  profile?: Profile;
 }
 
 export interface PastPaper {
@@ -101,6 +173,15 @@ export interface Textbook {
   cover_image_url?: string;
   created_at: string;
   updated_at: string;
+  // Relations
+  authors?: TextbookAuthor[];
+}
+
+export interface TextbookAuthor {
+  id: string;
+  textbook_id: string;
+  author_name: string;
+  order_number: number;
 }
 
 export interface Syllabus {
@@ -116,4 +197,57 @@ export interface Syllabus {
   specimen_file_url?: string;
   created_at: string;
   updated_at: string;
+  // Relations
+  papers?: SyllabusPaper[];
+}
+
+export interface SyllabusPaper {
+  id: string;
+  syllabus_id: string;
+  paper_name: string;
+  order_number: number;
+  created_at: string;
+  // Relations
+  topics?: SyllabusPaperTopic[];
+}
+
+export interface SyllabusPaperTopic {
+  id: string;
+  paper_id: string;
+  topic_name: string;
+  order_number: number;
+  created_at: string;
+}
+
+export interface SystemSetting {
+  id: string;
+  setting_key: string;
+  setting_value: any;
+  description?: string;
+  updated_by?: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  old_values?: any;
+  new_values?: any;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface AnalyticsEvent {
+  id: string;
+  user_id?: string;
+  event_type: string;
+  event_data?: any;
+  session_id?: string;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
 }
