@@ -140,12 +140,37 @@ export default function SyllabusPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-gray-900">{syllabi.length}</div>
             <div className="text-sm text-gray-600">Total Syllabi</div>
             <div className="text-xs text-success mt-1">+2 this month</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-900">{subjects.length}</div>
+            <div className="text-sm text-gray-600">Subjects Covered</div>
+            <div className="text-xs text-gray-500 mt-1">Across all levels</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-900">
+              {syllabi.reduce((acc, syllabus) => acc + syllabus.totalTopics, 0)}
+            </div>
+            <div className="text-sm text-gray-600">Total Topics</div>
+            <div className="text-xs text-gray-500 mt-1">All syllabi combined</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-900">
+              {syllabi.reduce((acc, syllabus) => acc + syllabus.papers.length, 0)}
+            </div>
+            <div className="text-sm text-gray-600">Examination Papers</div>
+            <div className="text-xs text-gray-500 mt-1">Across all subjects</div>
           </CardContent>
         </Card>
       </div>
