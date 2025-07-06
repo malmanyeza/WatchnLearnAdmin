@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, X, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen } from 'lucide-react';
 import { contentOperations, subjectOperations } from '@/lib/database';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +48,13 @@ interface AddContentDialogProps {
   subjects?: Subject[];
 }
 
+const contentTypes = [
+  { value: 'video', label: 'Video', icon: Video, accept: '.mp4,.mov,.avi,.mkv,.webm' },
+  { value: 'pdf', label: 'PDF Document', icon: FileText, accept: '.pdf' },
+  { value: 'quiz', label: 'Quiz', icon: HelpCircle, accept: '.json,.txt' },
+  { value: 'notes', label: 'Notes', icon: BookOpen, accept: '.pdf,.doc,.docx,.txt' },
+];
+
 export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjects }: AddContentDialogProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -62,6 +70,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     position: 1,
     title: '',
     type: '',
+    description: '',
     estimatedDuration: '',
     tags: [] as string[],
     file: null as File | null,
@@ -72,8 +81,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   const [selectedWeek, setSelectedWeek] = useState<Week | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [isNewChapter, setIsNewChapter] = useState(false);
-
-  const contentTypes = ['video', 'pdf', 'quiz', 'notes'];
 
   // Load subjects when dialog opens
   useEffect(() => {
@@ -165,15 +172,26 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         throw new Error('Chapter must be selected or created');
       }
 
+      // TODO: Handle file upload to Supabase Storage here
+      let fileUrl = '';
+      if (formData.file) {
+        // This would upload the file to Supabase Storage
+        // For now, we'll just use a placeholder
+        fileUrl = `placeholder-url-for-${formData.file.name}`;
+      }
+
       // Create the content
       const newContent = await contentOperations.createContent({
         chapter_id: chapterId,
         title: formData.title,
         type: formData.type as 'video' | 'pdf' | 'quiz' | 'notes',
+        description: formData.description || undefined,
         duration: formData.estimatedDuration || undefined,
         estimated_study_time: formData.estimatedDuration || undefined,
         order_number: formData.position,
         tags: formData.tags,
+        file_url: fileUrl || undefined,
+        file_size: formData.file?.size || undefined,
         created_by: user?.id,
       });
 
@@ -198,6 +216,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       position: 1,
       title: '',
       type: '',
+      description: '',
       estimatedDuration: '',
       tags: [],
       file: null,
@@ -228,12 +247,21 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     }));
   };
 
+  const getSelectedContentType = () => {
+    return contentTypes.find(type => type.value === formData.type);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setFormData(prev => ({ ...prev, file }));
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Content</DialogTitle>
         </DialogHeader>
@@ -285,11 +313,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                   <SelectValue placeholder="Select term" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedSubject.terms.map(term => (
-                    <SelectItem key={term.id} value={term.id}>
-                      {term.title}
-                    </SelectItem>
-                  ))}
+                  {selectedSubject.terms
+                    .sort((a, b) => a.order_number - b.order_number)
+                    .map(term => (
+                      <SelectItem key={term.id} value={term.id}>
+                        {term.title}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -308,11 +338,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                   <SelectValue placeholder="Select week" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedTerm.weeks.map(week => (
-                    <SelectItem key={week.id} value={week.id}>
-                      {week.title}
-                    </SelectItem>
-                  ))}
+                  {selectedTerm.weeks
+                    .sort((a, b) => a.order_number - b.order_number)
+                    .map(week => (
+                      <SelectItem key={week.id} value={week.id}>
+                        {week.title}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -361,11 +393,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                         <SelectValue placeholder="Select chapter" />
                       </SelectTrigger>
                       <SelectContent>
-                        {selectedWeek.chapters.map(chapter => (
-                          <SelectItem key={chapter.id} value={chapter.id}>
-                            {chapter.title} ({chapter.content.length} topics)
-                          </SelectItem>
-                        ))}
+                        {selectedWeek.chapters
+                          .sort((a, b) => a.order_number - b.order_number)
+                          .map(chapter => (
+                            <SelectItem key={chapter.id} value={chapter.id}>
+                              {chapter.title} ({chapter.content.length} topics)
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -411,7 +445,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             </div>
           )}
 
-          {/* Content Title and Type */}
+          {/* Content Details */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="title">Content Title *</Label>
@@ -435,12 +469,33 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {contentTypes.map(type => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                  ))}
+                  {contentTypes.map(type => {
+                    const Icon = type.icon;
+                    return (
+                      <SelectItem key={type.value} value={type.value}>
+                        <div className="flex items-center space-x-2">
+                          <Icon className="h-4 w-4" />
+                          <span>{type.label}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Brief description of the content..."
+              rows={3}
+              disabled={loading}
+            />
           </div>
 
           <div className="space-y-2">
@@ -454,6 +509,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             />
           </div>
 
+          {/* Tags */}
           <div className="space-y-2">
             <Label>Tags</Label>
             <div className="flex gap-2">
@@ -464,47 +520,88 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                 disabled={loading}
               />
-              <Button type="button" onClick={addTag} size="sm" disabled={loading}>
+              <Button type="button" onClick={addTag} size="sm" disabled={loading || !currentTag.trim()}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {formData.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                  {tag}
-                  <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tag)} />
-                </Badge>
-              ))}
-            </div>
+            {formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {formData.tags.map(tag => (
+                  <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                    {tag}
+                    <X 
+                      className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                      onClick={() => removeTag(tag)} 
+                    />
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
+          {/* File Upload */}
           <div className="space-y-2">
-            <Label htmlFor="file">Upload File</Label>
+            <Label htmlFor="file">Upload Content File</Label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-600 mb-2">
-                Drag and drop your file here, or click to browse
-              </p>
+              {getSelectedContentType() && (
+                <div className="mb-4">
+                  {React.createElement(getSelectedContentType()!.icon, { 
+                    className: "h-12 w-12 mx-auto text-gray-400 mb-2" 
+                  })}
+                  <p className="text-sm text-gray-600 mb-2">
+                    Upload {getSelectedContentType()!.label.toLowerCase()}
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Accepted formats: {getSelectedContentType()!.accept}
+                  </p>
+                </div>
+              )}
+              
               <Input
                 id="file"
                 type="file"
-                onChange={(e) => setFormData(prev => ({ ...prev, file: e.target.files?.[0] || null }))}
-                accept=".mp4,.mov,.pdf,.doc,.docx,.ppt,.pptx"
+                onChange={handleFileChange}
+                accept={getSelectedContentType()?.accept || '*'}
                 className="hidden"
                 disabled={loading}
               />
+              
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => document.getElementById('file')?.click()}
-                disabled={loading}
+                disabled={loading || !formData.type}
               >
+                <Upload className="h-4 w-4 mr-2" />
                 Choose File
               </Button>
-              {formData.file && (
-                <p className="text-sm text-gray-600 mt-2">
-                  Selected: {formData.file.name}
+              
+              {!formData.type && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Please select a content type first
                 </p>
+              )}
+              
+              {formData.file && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-900">
+                    Selected: {formData.file.name}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Size: {(formData.file.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFormData(prev => ({ ...prev, file: null }))}
+                    className="mt-2"
+                    disabled={loading}
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Remove
+                  </Button>
+                </div>
               )}
             </div>
           </div>
