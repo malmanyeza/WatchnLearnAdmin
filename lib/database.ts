@@ -282,7 +282,7 @@ export const contentOperations = {
     }
   },
 
-  // Create new content/topic
+  // Create new content/topic with file support
   async createContent(contentData: {
     chapter_id: string;
     title: string;
@@ -290,6 +290,7 @@ export const contentOperations = {
     description?: string;
     file_url?: string;
     file_size?: number;
+    file_path?: string;
     duration?: string;
     estimated_study_time?: string;
     order_number: number;
@@ -348,6 +349,7 @@ export const contentOperations = {
     description?: string;
     file_url?: string;
     file_size?: number;
+    file_path?: string;
     duration?: string;
     estimated_study_time?: string;
     order_number?: number;
@@ -377,6 +379,19 @@ export const contentOperations = {
   // Delete content
   async deleteContent(id: string) {
     try {
+      // First get the content to check if it has a file
+      const { data: content, error: fetchError } = await supabase
+        .from('content')
+        .select('file_path')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching content for deletion:', fetchError);
+        throw new Error(`Failed to fetch content: ${fetchError.message}`);
+      }
+
+      // Delete the content record
       const { error } = await supabase
         .from('content')
         .delete()
@@ -385,6 +400,22 @@ export const contentOperations = {
       if (error) {
         console.error('Error deleting content:', error);
         throw new Error(`Failed to delete content: ${error.message}`);
+      }
+
+      // If content had a file, delete it from storage
+      if (content?.file_path) {
+        try {
+          const { error: storageError } = await supabase.storage
+            .from('content-files')
+            .remove([content.file_path]);
+
+          if (storageError) {
+            console.warn('Failed to delete file from storage:', storageError);
+            // Don't throw error here as the content record is already deleted
+          }
+        } catch (storageError) {
+          console.warn('Error deleting file from storage:', storageError);
+        }
       }
     } catch (error: any) {
       console.error('Error in deleteContent:', error);

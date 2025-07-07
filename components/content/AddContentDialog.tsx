@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen } from 'lucide-react';
+import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen, AlertCircle } from 'lucide-react';
 import { contentOperations, subjectOperations } from '@/lib/database';
+import { storageOperations } from '@/lib/storage';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -59,6 +60,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [formData, setFormData] = useState({
@@ -149,6 +151,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setUploadProgress(0);
 
     try {
       let chapterId = formData.chapterId;
@@ -172,15 +175,46 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         throw new Error('Chapter must be selected or created');
       }
 
-      // TODO: Handle file upload to Supabase Storage here
+      // Handle file upload if file is provided
       let fileUrl = '';
+      let fileSize = 0;
+      let filePath = '';
+
       if (formData.file) {
-        // This would upload the file to Supabase Storage
-        // For now, we'll just use a placeholder
-        fileUrl = `placeholder-url-for-${formData.file.name}`;
+        setUploadProgress(25);
+        
+        // Validate file type and size
+        const fileConfig = storageOperations.getFileTypeConfig(formData.type);
+        const validation = storageOperations.validateFile(
+          formData.file, 
+          fileConfig.allowedTypes, 
+          fileConfig.maxSizeMB
+        );
+
+        if (!validation.valid) {
+          throw new Error(validation.error);
+        }
+
+        setUploadProgress(50);
+
+        // Generate a temporary content ID for file naming
+        const tempContentId = `temp-${Date.now()}`;
+        
+        // Upload file to Supabase Storage
+        const uploadResult = await storageOperations.uploadContentFile(
+          formData.file,
+          tempContentId,
+          formData.type
+        );
+
+        fileUrl = uploadResult.url;
+        fileSize = uploadResult.size;
+        filePath = uploadResult.path;
+
+        setUploadProgress(75);
       }
 
-      // Create the content
+      // Create the content record
       const newContent = await contentOperations.createContent({
         chapter_id: chapterId,
         title: formData.title,
@@ -191,9 +225,18 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         order_number: formData.position,
         tags: formData.tags,
         file_url: fileUrl || undefined,
-        file_size: formData.file?.size || undefined,
+        file_size: fileSize || undefined,
+        file_path: filePath || undefined,
         created_by: user?.id,
       });
+
+      setUploadProgress(100);
+
+      // If we uploaded a file with a temporary ID, we should update the file path with the actual content ID
+      if (formData.file && newContent.id) {
+        // Note: In a production system, you might want to rename the file to use the actual content ID
+        // For now, we'll keep the temporary naming scheme as it's still unique
+      }
 
       onContentAdded(newContent);
       setOpen(false);
@@ -203,6 +246,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       setError(error.message || 'Failed to create content. Please try again.');
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -228,6 +272,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setSelectedChapter(null);
     setIsNewChapter(false);
     setError(null);
+    setUploadProgress(0);
   };
 
   const addTag = () => {
@@ -253,7 +298,30 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
+    
+    if (file && formData.type) {
+      // Validate file immediately
+      const fileConfig = storageOperations.getFileTypeConfig(formData.type);
+      const validation = storageOperations.validateFile(
+        file, 
+        fileConfig.allowedTypes, 
+        fileConfig.maxSizeMB
+      );
+
+      if (!validation.valid) {
+        setError(validation.error || 'Invalid file');
+        return;
+      }
+      
+      setError(null);
+    }
+    
     setFormData(prev => ({ ...prev, file }));
+  };
+
+  const removeFile = () => {
+    setFormData(prev => ({ ...prev, file: null }));
+    setError(null);
   };
 
   return (
@@ -268,6 +336,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
 
         {error && (
           <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -462,7 +531,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
               <Label htmlFor="type">Content Type *</Label>
               <Select 
                 value={formData.type} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, type: value, file: null }))}
                 disabled={loading}
               >
                 <SelectTrigger>
@@ -554,6 +623,11 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                   <p className="text-xs text-gray-500 mb-4">
                     Accepted formats: {getSelectedContentType()!.accept}
                   </p>
+                  {formData.type && (
+                    <p className="text-xs text-gray-500 mb-4">
+                      Max size: {storageOperations.getFileTypeConfig(formData.type).maxSizeMB}MB
+                    </p>
+                  )}
                 </div>
               )}
               
@@ -594,13 +668,26 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setFormData(prev => ({ ...prev, file: null }))}
+                    onClick={removeFile}
                     className="mt-2"
                     disabled={loading}
                   >
                     <X className="h-3 w-3 mr-1" />
                     Remove
                   </Button>
+                </div>
+              )}
+
+              {/* Upload Progress */}
+              {uploadProgress > 0 && uploadProgress < 100 && (
+                <div className="mt-4">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-primary h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">Uploading... {uploadProgress}%</p>
                 </div>
               )}
             </div>
@@ -622,7 +709,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
+                  {uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : 'Creating...'}
                 </>
               ) : (
                 'Add Content'
