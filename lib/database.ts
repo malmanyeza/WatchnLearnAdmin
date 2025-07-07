@@ -290,7 +290,6 @@ export const contentOperations = {
     description?: string;
     file_url?: string;
     file_size?: number;
-    file_path?: string;
     duration?: string;
     estimated_study_time?: string;
     order_number: number;
@@ -349,7 +348,6 @@ export const contentOperations = {
     description?: string;
     file_url?: string;
     file_size?: number;
-    file_path?: string;
     duration?: string;
     estimated_study_time?: string;
     order_number?: number;
@@ -382,7 +380,7 @@ export const contentOperations = {
       // First get the content to check if it has a file
       const { data: content, error: fetchError } = await supabase
         .from('content')
-        .select('file_path')
+        .select('file_url')
         .eq('id', id)
         .single();
 
@@ -403,11 +401,16 @@ export const contentOperations = {
       }
 
       // If content had a file, delete it from storage
-      if (content?.file_path) {
+      if (content?.file_url) {
         try {
+          // Extract file path from URL for storage deletion
+          const url = new URL(content.file_url);
+          const pathParts = url.pathname.split('/');
+          const filePath = pathParts.slice(-2).join('/'); // Get last two parts (folder/filename)
+          
           const { error: storageError } = await supabase.storage
             .from('content-files')
-            .remove([content.file_path]);
+            .remove([filePath]);
 
           if (storageError) {
             console.warn('Failed to delete file from storage:', storageError);

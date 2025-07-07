@@ -178,7 +178,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       // Handle file upload if file is provided
       let fileUrl = '';
       let fileSize = 0;
-      let filePath = '';
 
       if (formData.file) {
         setUploadProgress(25);
@@ -209,7 +208,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
 
         fileUrl = uploadResult.url;
         fileSize = uploadResult.size;
-        filePath = uploadResult.path;
 
         setUploadProgress(75);
       }
@@ -226,17 +224,10 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         tags: formData.tags,
         file_url: fileUrl || undefined,
         file_size: fileSize || undefined,
-        file_path: filePath || undefined,
         created_by: user?.id,
       });
 
       setUploadProgress(100);
-
-      // If we uploaded a file with a temporary ID, we should update the file path with the actual content ID
-      if (formData.file && newContent.id) {
-        // Note: In a production system, you might want to rename the file to use the actual content ID
-        // For now, we'll keep the temporary naming scheme as it's still unique
-      }
 
       onContentAdded(newContent);
       setOpen(false);
