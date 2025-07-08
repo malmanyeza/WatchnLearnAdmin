@@ -321,6 +321,76 @@ export const contentOperations = {
     }
   },
 
+  // Create quiz questions for manual quizzes
+  async createQuizQuestions(contentId: string, questions: Array<{
+    questionText: string;
+    questionImageUrl?: string;
+    answerA: string;
+    answerB: string;
+    answerC?: string;
+    answerD?: string;
+    answerAImageUrl?: string;
+    answerBImageUrl?: string;
+    answerCImageUrl?: string;
+    answerDImageUrl?: string;
+    correctAnswer: 'A' | 'B' | 'C' | 'D';
+    orderNumber: number;
+  }>) {
+    try {
+      const questionsToInsert = questions.map(q => ({
+        content_id: contentId,
+        question_text: q.questionText,
+        question_image_url: q.questionImageUrl,
+        answer_a: q.answerA,
+        answer_b: q.answerB,
+        answer_c: q.answerC,
+        answer_d: q.answerD,
+        answer_a_image_url: q.answerAImageUrl,
+        answer_b_image_url: q.answerBImageUrl,
+        answer_c_image_url: q.answerCImageUrl,
+        answer_d_image_url: q.answerDImageUrl,
+        correct_answer: q.correctAnswer,
+        order_number: q.orderNumber,
+      }));
+
+      const { data, error } = await supabase
+        .from('quiz_questions')
+        .insert(questionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('Error creating quiz questions:', error);
+        throw new Error(`Failed to create quiz questions: ${error.message}`);
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error('Error in createQuizQuestions:', error);
+      throw error;
+    }
+  },
+
+  // Get quiz questions for a content item
+  async getQuizQuestions(contentId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('quiz_questions')
+        .select('*')
+        .eq('content_id', contentId)
+        .order('order_number', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching quiz questions:', error);
+        throw new Error(`Failed to fetch quiz questions: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error: any) {
+      console.error('Error in getQuizQuestions:', error);
+      throw error;
+    }
+  },
+
   // Get content by chapter
   async getContentByChapter(chapterId: string) {
     try {
@@ -420,6 +490,20 @@ export const contentOperations = {
         } catch (storageError) {
           console.warn('Error deleting file from storage:', storageError);
         }
+      }
+
+      // Delete associated quiz questions if any
+      try {
+        const { error: quizError } = await supabase
+          .from('quiz_questions')
+          .delete()
+          .eq('content_id', id);
+
+        if (quizError) {
+          console.warn('Failed to delete quiz questions:', quizError);
+        }
+      } catch (quizError) {
+        console.warn('Error deleting quiz questions:', quizError);
       }
     } catch (error: any) {
       console.error('Error in deleteContent:', error);
