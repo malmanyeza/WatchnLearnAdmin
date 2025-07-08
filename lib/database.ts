@@ -294,6 +294,7 @@ export const contentOperations = {
     estimated_study_time?: string;
     order_number: number;
     tags?: string[];
+    quiz_data?: any;
     created_by?: string;
   }) {
     try {
