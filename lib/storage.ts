@@ -342,6 +342,11 @@ export const contentOperations = {
         question_text: q.questionText,
         question_image_url: q.questionImageUrl,
         answer_a: q.answerA,
+      }
+      )
+      )
+    }
+  }
   // Get content by chapter
   async getContentByChapter(chapterId: string) {
     try {
