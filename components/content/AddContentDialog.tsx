@@ -10,9 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-  Image as ImageIcon,
-  AlertCircle,
-import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen, AlertCircle } from 'lucide-react';
+import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { contentOperations, subjectOperations } from '@/lib/database';
 import { storageOperations } from '@/lib/storage';
 import { Alert, AlertDescription } from '@/components/ui/alert';
