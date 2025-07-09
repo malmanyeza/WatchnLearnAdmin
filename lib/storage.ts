@@ -94,6 +94,132 @@ export const storageOperations = {
       return null;
     }
   }
+
+  // Upload content file to appropriate bucket based on type
+  async uploadContentFile(file: File, contentId: string, contentType: string) {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${contentId}-${Date.now()}.${fileExt}`;
+      const filePath = `${contentType}/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('content-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        throw new Error(`Failed to upload file: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('content-files')
+        .getPublicUrl(filePath);
+
+      return {
+        path: data.path,
+        url: publicUrl,
+        size: file.size
+      };
+    } catch (error: any) {
+      console.error('Error in uploadContentFile:', error);
+      throw error;
+    }
+  },
+
+  // Upload quiz image to quiz-images bucket
+  async uploadQuizImage(file: File, contentId: string, imageType: 'question' | 'answer', questionIndex: string, answerKey?: string) {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = answerKey 
+        ? `${contentId}-q${questionIndex}-${answerKey}.${fileExt}`
+        : `${contentId}-q${questionIndex}.${fileExt}`;
+      const filePath = `quiz-images/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('quiz-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Quiz image upload error:', error);
+        throw new Error(`Failed to upload quiz image: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('quiz-images')
+        .getPublicUrl(filePath);
+
+      return {
+        path: data.path,
+        url: publicUrl,
+        size: file.size
+      };
+    } catch (error: any) {
+      console.error('Error in uploadQuizImage:', error);
+      throw error;
+    }
+  },
+
+  // Get file type configuration
+  getFileTypeConfig(contentType: string) {
+    const configs = {
+      video: {
+        allowedTypes: ['video/mp4', 'video/mov', 'video/avi', 'video/mkv', 'video/webm'],
+        maxSizeMB: 500
+      },
+      pdf: {
+        allowedTypes: ['application/pdf'],
+        maxSizeMB: 50
+      },
+      quiz: {
+        allowedTypes: ['application/pdf', 'application/json', 'text/plain'],
+        maxSizeMB: 20
+      },
+      notes: {
+        allowedTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'],
+        maxSizeMB: 50
+      }
+    };
+
+    return configs[contentType as keyof typeof configs] || {
+      allowedTypes: [],
+      maxSizeMB: 50
+    };
+  },
+
+  // Validate file with specific configuration
+  validateFile(file: File, allowedTypes: string[], maxSizeMB: number) {
+    const errors: string[] = [];
+
+    // Check file size
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      return {
+        valid: false,
+        error: `File size must be less than ${maxSizeMB}MB`
+      };
+    }
+
+    // Check file type
+    if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
+      return {
+        valid: false,
+        error: `File type must be one of: ${allowedTypes.join(', ')}`
+      };
+    }
+
+    return {
+      valid: true,
+      error: null
+    };
+  }
 };
 
 // Enhanced Subject operations

@@ -253,21 +253,99 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
           quizData = {
             method: 'ai',
             prompt: aiPrompt,
-            generated: false // Will be processed later
+            generated: false,
+            totalQuestions: 0,
+            hasImages: false,
+            questions: []
           };
         } else if (quizMethod === 'upload') {
           quizData = {
             method: 'upload',
-            fileUrl: fileUrl
+            fileUrl: fileUrl,
+            totalQuestions: 0,
+            hasImages: false,
+            questions: []
           };
         } else if (quizMethod === 'manual') {
+          // Process manual quiz questions with image uploads
+          const processedQuestions = [];
+          
+          for (let i = 0; i < questions.length; i++) {
+            const question = questions[i];
+            let questionImageUrl = '';
+            const answerImageUrls = { A: '', B: '', C: '', D: '' };
+
+            // Create a temporary content ID for file naming
+            const tempContentId = `temp-${Date.now()}`;
+
+            // Upload question image if exists
+            if (question.image) {
+              try {
+                const uploadResult = await storageOperations.uploadQuizImage(
+                  question.image,
+                  tempContentId,
+                  'question',
+                  i.toString()
+                );
+                questionImageUrl = uploadResult.url;
+              } catch (uploadError) {
+                console.warn('Failed to upload question image:', uploadError);
+              }
+            }
+
+            // Upload answer images if they exist
+            for (const [answerKey, answerData] of Object.entries(question.answers)) {
+              if (answerData.image) {
+                try {
+                  const uploadResult = await storageOperations.uploadQuizImage(
+                    answerData.image,
+                    tempContentId,
+                    'answer',
+                    i.toString(),
+                    answerKey
+                  );
+                  answerImageUrls[answerKey as keyof typeof answerImageUrls] = uploadResult.url;
+                } catch (uploadError) {
+                  console.warn(`Failed to upload answer ${answerKey} image:`, uploadError);
+                }
+              }
+            }
+
+            // Add processed question to the array
+            processedQuestions.push({
+              id: question.id,
+              text: question.text,
+              imageUrl: questionImageUrl || null,
+              answers: {
+                A: {
+                  text: question.answers.A.text,
+                  imageUrl: answerImageUrls.A || null
+                },
+                B: {
+                  text: question.answers.B.text,
+                  imageUrl: answerImageUrls.B || null
+                },
+                C: {
+                  text: question.answers.C.text || null,
+                  imageUrl: answerImageUrls.C || null
+                },
+                D: {
+                  text: question.answers.D.text || null,
+                  imageUrl: answerImageUrls.D || null
+                }
+              },
+              correctAnswer: question.correctAnswer
+            });
+          }
+
           quizData = {
             method: 'manual',
             totalQuestions: questions.length,
             hasImages: questions.some(q => 
               q.imagePreview || 
               Object.values(q.answers).some(a => a.imagePreview)
-            )
+            ),
+            questions: processedQuestions
           };
         }
       }
@@ -289,68 +367,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         quiz_data: quizData,
         created_by: user?.id,
       });
-
-      // Handle manual quiz questions with image uploads
-      if (formData.type === 'quiz' && quizMethod === 'manual' && questions.length > 0) {
-        const questionsToCreate = [];
-
-        for (let i = 0; i < questions.length; i++) {
-          const question = questions[i];
-          let questionImageUrl = '';
-          const answerImageUrls = { A: '', B: '', C: '', D: '' };
-
-          // Upload question image if exists
-          if (question.image) {
-            try {
-              const uploadResult = await storageOperations.uploadQuizImage(
-                question.image,
-                createdContent.id,
-                'question',
-                i.toString()
-              );
-              questionImageUrl = uploadResult.url;
-            } catch (uploadError) {
-              console.warn('Failed to upload question image:', uploadError);
-            }
-          }
-
-          // Upload answer images if they exist
-          for (const [answerKey, answerData] of Object.entries(question.answers)) {
-            if (answerData.image) {
-              try {
-                const uploadResult = await storageOperations.uploadQuizImage(
-                  answerData.image,
-                  createdContent.id,
-                  'answer',
-                  i.toString(),
-                  answerKey
-                );
-                answerImageUrls[answerKey as keyof typeof answerImageUrls] = uploadResult.url;
-              } catch (uploadError) {
-                console.warn(`Failed to upload answer ${answerKey} image:`, uploadError);
-              }
-            }
-          }
-
-          questionsToCreate.push({
-            questionText: question.text,
-            questionImageUrl: questionImageUrl || undefined,
-            answerA: question.answers.A.text,
-            answerB: question.answers.B.text,
-            answerC: question.answers.C.text || undefined,
-            answerD: question.answers.D.text || undefined,
-            answerAImageUrl: answerImageUrls.A || undefined,
-            answerBImageUrl: answerImageUrls.B || undefined,
-            answerCImageUrl: answerImageUrls.C || undefined,
-            answerDImageUrl: answerImageUrls.D || undefined,
-            correctAnswer: question.correctAnswer,
-            orderNumber: i + 1,
-          });
-        }
-
-        // Create all quiz questions
-        await contentOperations.createQuizQuestions(createdContent.id, questionsToCreate);
-      }
 
       setUploadProgress(100);
 
