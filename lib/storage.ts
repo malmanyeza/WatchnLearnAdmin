@@ -1,5 +1,101 @@
 import { supabase } from './supabase';
 
+// File upload operations for Supabase Storage
+export const storageOperations = {
+  // Upload file to content-files bucket
+  async uploadFile(file: File, folder: string = 'general') {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${folder}/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('content-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        throw new Error(`Failed to upload file: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('content-files')
+        .getPublicUrl(filePath);
+
+      return {
+        path: data.path,
+        url: publicUrl,
+        size: file.size,
+        type: file.type,
+        name: file.name
+      };
+    } catch (error: any) {
+      console.error('Error in uploadFile:', error);
+      throw error;
+    }
+  },
+
+  // Delete file from storage
+  async deleteFile(filePath: string) {
+    try {
+      const { error } = await supabase.storage
+        .from('content-files')
+        .remove([filePath]);
+
+      if (error) {
+        console.error('Delete error:', error);
+        throw new Error(`Failed to delete file: ${error.message}`);
+      }
+    } catch (error: any) {
+      console.error('Error in deleteFile:', error);
+      throw error;
+    }
+  },
+
+  // Validate file type and size
+  validateFile(file: File, allowedTypes: string[] = [], maxSize: number = 50 * 1024 * 1024) {
+    const errors: string[] = [];
+
+    // Check file size (default 50MB)
+    if (file.size > maxSize) {
+      errors.push(`File size must be less than ${maxSize / (1024 * 1024)}MB`);
+    }
+
+    // Check file type if specified
+    if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
+      errors.push(`File type must be one of: ${allowedTypes.join(', ')}`);
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  },
+
+  // Get file info from URL
+  getFileInfoFromUrl(url: string) {
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const fileName = pathParts[pathParts.length - 1];
+      const folder = pathParts[pathParts.length - 2];
+      
+      return {
+        fileName,
+        folder,
+        fullPath: `${folder}/${fileName}`
+      };
+    } catch (error) {
+      console.error('Error parsing file URL:', error);
+      return null;
+    }
+  }
+};
+
 // Enhanced Subject operations
 export const subjectOperations = {
   // Create a new subject with proper structure
@@ -369,6 +465,7 @@ export const contentOperations = {
       throw error;
     }
   },
+
   // Get content by chapter
   async getContentByChapter(chapterId: string) {
     try {
