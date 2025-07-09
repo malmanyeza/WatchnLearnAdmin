@@ -93,7 +93,7 @@ export const storageOperations = {
       console.error('Error parsing file URL:', error);
       return null;
     }
-  }
+  },
 
   // Upload content file to appropriate bucket based on type
   async uploadContentFile(file: File, contentId: string, contentType: string) {
