@@ -424,6 +424,7 @@ export const contentOperations = {
     order_number?: number;
     status?: 'draft' | 'published' | 'review' | 'archived';
     tags?: string[];
+    quiz_data?: any;
   }) {
     try {
       const { data, error } = await supabase
