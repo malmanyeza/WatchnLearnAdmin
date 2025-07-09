@@ -342,11 +342,33 @@ export const contentOperations = {
         question_text: q.questionText,
         question_image_url: q.questionImageUrl,
         answer_a: q.answerA,
+        answer_b: q.answerB,
+        answer_c: q.answerC,
+        answer_d: q.answerD,
+        answer_a_image_url: q.answerAImageUrl,
+        answer_b_image_url: q.answerBImageUrl,
+        answer_c_image_url: q.answerCImageUrl,
+        answer_d_image_url: q.answerDImageUrl,
+        correct_answer: q.correctAnswer,
+        order_number: q.orderNumber,
+      }));
+
+      const { data, error } = await supabase
+        .from('quiz_questions')
+        .insert(questionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('Error creating quiz questions:', error);
+        throw new Error(`Failed to create quiz questions: ${error.message}`);
       }
-      )
-      )
+
+      return data;
+    } catch (error: any) {
+      console.error('Error in createQuizQuestions:', error);
+      throw error;
     }
-  }
+  },
   // Get content by chapter
   async getContentByChapter(chapterId: string) {
     try {
