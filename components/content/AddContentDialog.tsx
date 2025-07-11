@@ -270,7 +270,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             hasImages: false
           };
         } else if (quizMethod === 'manual') {
-          console.log(submitQuestions)
+          console.log('Here are the submitted qeustions',submitQuestions)
           // Process questions to include in quiz_data
           const processedQuestions = submitQuestions.map((question, index) => ({
             id: question.id,
