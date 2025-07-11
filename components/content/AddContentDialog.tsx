@@ -332,7 +332,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       // Handle manual quiz questions with image uploads
       if (formData.type === 'quiz' && quizMethod === 'manual' && submitQuestions.length > 0) {
         const questionsToCreate = [];
-        const updatedQuestions = [...(quizData?.submitQuestions || [])];
+        const updatedQuestions = [...(quizData?.questions || [])];
 
         for (let i = 0; i < questions.length; i++) {
           const question = questions[i];
@@ -427,7 +427,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
 
       onContentAdded(createdContent);
       setOpen(false);
-      resetForm();
     } catch (error: any) {
       console.error('Error creating content:', error);
       setError(error.message || 'Failed to create content. Please try again.');
