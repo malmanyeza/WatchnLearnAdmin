@@ -270,9 +270,9 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             hasImages: false
           };
         } else if (quizMethod === 'manual') {
-          console.log(questions)
+          console.log(submitQuestions)
           // Process questions to include in quiz_data
-          const processedQuestions = questions.map((question, index) => ({
+          const processedQuestions = submitQuestions.map((question, index) => ({
             id: question.id,
             text: question.text,
             imageUrl: question.imagePreview ? '' : undefined, // Will be updated after image upload
@@ -420,6 +420,8 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
           quiz_data: updatedQuizData
         });
       }
+
+      
 
       setUploadProgress(100);
 
