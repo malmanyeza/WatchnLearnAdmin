@@ -636,7 +636,12 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) resetForm(); // Reset only when closing
+      }}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
