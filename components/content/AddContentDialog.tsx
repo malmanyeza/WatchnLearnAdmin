@@ -294,6 +294,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             orderNumber: index + 1
           }));
 
+          console.log(processedQuestions)
           quizData = {
             method: 'manual',
             questions: processedQuestions,
