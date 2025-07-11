@@ -184,6 +184,9 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setError(null);
     setUploadProgress(0);
 
+    // Capture current questions snapshot
+    const submitQuestions = [...questions];
+
     try {
       let chapterId = formData.chapterId;
 
