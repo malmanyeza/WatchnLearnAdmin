@@ -114,6 +114,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     },
     correctAnswer: 'A'
   });
+  const [quizDataPreview, setQuizDataPreview] = useState<any>(null);
 
   // Load subjects when dialog opens
   useEffect(() => {
@@ -178,6 +179,55 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     }
   }, [formData.chapterId, selectedWeek]);
 
+  // Update quiz data whenever questions change (for manual quiz method)
+  useEffect(() => {
+    if (quizMethod === 'manual' && questions.length > 0) {
+      // Update the quiz data structure with current questions
+      const hasImages = questions.some(q => 
+        q.imagePreview || 
+        Object.values(q.answers).some(a => a.imagePreview)
+      );
+
+      // This will be used when creating content to ensure quiz_data has current questions
+      setQuizDataPreview({
+        method: 'manual',
+        totalQuestions: questions.length,
+        hasImages: hasImages,
+        questions: questions.map(q => ({
+          id: q.id,
+          text: q.text,
+          imageUrl: q.imagePreview || null,
+          answers: {
+            A: {
+              text: q.answers.A.text,
+              imageUrl: q.answers.A.imagePreview || null
+            },
+            B: {
+              text: q.answers.B.text,
+              imageUrl: q.answers.B.imagePreview || null
+            },
+            C: {
+              text: q.answers.C.text,
+              imageUrl: q.answers.C.imagePreview || null
+            },
+            D: {
+              text: q.answers.D.text,
+              imageUrl: q.answers.D.imagePreview || null
+            }
+          },
+          correctAnswer: q.correctAnswer
+        }))
+      });
+    } else if (quizMethod === 'manual' && questions.length === 0) {
+      // Reset quiz data when no questions
+      setQuizDataPreview({
+        method: 'manual',
+        totalQuestions: 0,
+        hasImages: false,
+        questions: []
+      });
+    }
+  }, [questions, quizMethod]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -267,38 +317,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             hasImages: false
           };
         } else if (quizMethod === 'manual') {
-          console.log(questions)
-          // Process questions to include in quiz_data
-          const processedQuestions = questions.map((question, index) => ({
-            id: question.id,
-            text: question.text,
-            imageUrl: question.imagePreview ? '' : undefined, // Will be updated after image upload
-            answers: {
-              A: {
-                text: question.answers.A.text,
-                imageUrl: question.answers.A.imagePreview ? '' : undefined
-              },
-              B: {
-                text: question.answers.B.text,
-                imageUrl: question.answers.B.imagePreview ? '' : undefined
-              },
-              C: question.answers.C.text ? {
-                text: question.answers.C.text,
-                imageUrl: question.answers.C.imagePreview ? '' : undefined
-              } : undefined,
-              D: question.answers.D.text ? {
-                text: question.answers.D.text,
-                imageUrl: question.answers.D.imagePreview ? '' : undefined
-              } : undefined
-            },
-            correctAnswer: question.correctAnswer,
-            orderNumber: index + 1
-          }));
-
-          console.log(processedQuestions)
-          quizData = {
+          // Use the preview data that's kept in sync with questions state
+          quizData = quizDataPreview || {
             method: 'manual',
-            questions: processedQuestions,
+            totalQuestions: 0,
+            hasImages: false,
+            questions: []
+          };
             totalQuestions: questions.length,
             hasImages: questions.some(q => 
               q.imagePreview || 
