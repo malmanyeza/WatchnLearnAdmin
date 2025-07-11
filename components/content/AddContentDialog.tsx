@@ -330,9 +330,9 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       });
 
       // Handle manual quiz questions with image uploads
-      if (formData.type === 'quiz' && quizMethod === 'manual' && questions.length > 0) {
+      if (formData.type === 'quiz' && quizMethod === 'manual' && submitQuestions.length > 0) {
         const questionsToCreate = [];
-        const updatedQuestions = [...(quizData?.questions || [])];
+        const updatedQuestions = [...(quizData?.submitQuestions || [])];
 
         for (let i = 0; i < questions.length; i++) {
           const question = questions[i];
