@@ -1,6 +1,6 @@
 'use client';
 
-import React,{ useState, useEffect } from 'react';
+import React,{ useState, useEffect, useRef } from 'react';
 import { storageOperations } from '@/lib/storage';
 import { contentOperations, subjectOperations } from '@/lib/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -105,6 +105,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   const [quizMethod, setQuizMethod] = useState<'ai' | 'upload' | 'manual'>('ai');
   const [aiPrompt, setAiPrompt] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
+  const questionsRef = useRef<Question[]>([]); // Ref to track questions reliably
   const [currentQuestion, setCurrentQuestion] = useState<Question>({
     id: '',
     text: '',
@@ -114,6 +115,11 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     },
     correctAnswer: 'A'
   });
+
+  // Sync ref with state
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
   // Load subjects when dialog opens
   useEffect(() => {
@@ -183,9 +189,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setLoading(true);
     setError(null);
     setUploadProgress(0);
-
-    // Capture current questions snapshot
-    const submitQuestions = [...questions];
 
     try {
       let chapterId = formData.chapterId;
@@ -270,9 +273,11 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             hasImages: false
           };
         } else if (quizMethod === 'manual') {
-          console.log('Here are the submitted qeustions',submitQuestions)
+          // Use the ref to get current questions reliably
+          const currentQuestions = questionsRef.current;
+          
           // Process questions to include in quiz_data
-          const processedQuestions = submitQuestions.map((question, index) => ({
+          const processedQuestions = currentQuestions.map((question, index) => ({
             id: question.id,
             text: question.text,
             imageUrl: question.imagePreview ? '' : undefined, // Will be updated after image upload
@@ -298,15 +303,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             orderNumber: index + 1
           }));
 
-          console.log(processedQuestions)
           quizData = {
             method: 'manual',
             questions: processedQuestions,
-            totalQuestions: questions.length,
-            hasImages: questions.some(q => 
+            totalQuestions: currentQuestions.length,
+            hasImages: currentQuestions.some(q => 
               q.imagePreview || 
               Object.values(q.answers).some(a => a.imagePreview)
-            )
           };
         }
       }
@@ -330,12 +333,12 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       });
 
       // Handle manual quiz questions with image uploads
-      if (formData.type === 'quiz' && quizMethod === 'manual' && submitQuestions.length > 0) {
+      if (formData.type === 'quiz' && quizMethod === 'manual' && questionsRef.current.length > 0) {
         const questionsToCreate = [];
         const updatedQuestions = [...(quizData?.questions || [])];
 
-        for (let i = 0; i < questions.length; i++) {
-          const question = questions[i];
+        for (let i = 0; i < questionsRef.current.length; i++) {
+          const question = questionsRef.current[i];
           let questionImageUrl = '';
           const answerImageUrls = { A: '', B: '', C: '', D: '' };
 
@@ -421,12 +424,11 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         });
       }
 
-      
-
       setUploadProgress(100);
 
       onContentAdded(createdContent);
       setOpen(false);
+      resetForm();
     } catch (error: any) {
       console.error('Error creating content:', error);
       setError(error.message || 'Failed to create content. Please try again.');
@@ -460,6 +462,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setQuizMethod('ai');
     setAiPrompt('');
     setQuestions([]);
+    questionsRef.current = [];
     setCurrentQuestion({
       id: '',
       text: '',
@@ -640,12 +643,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onOpenChange={(isOpen) => {
-        setOpen(isOpen);
-        if (!isOpen) resetForm(); // Reset only when closing
-      }}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
