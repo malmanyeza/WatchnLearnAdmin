@@ -14,6 +14,7 @@ import { Plus, Upload, X, Loader2, FileText, Video, HelpCircle, BookOpen, AlertC
 import { Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
+import { quizOperations, QuizQuestion } from '@/lib/quiz';
 
 interface Subject {
   id: string;
@@ -42,20 +43,6 @@ interface Chapter {
   title: string;
   order_number: number;
   content: any[];
-}
-
-interface Question {
-  id: string;
-  text: string;
-  image?: File;
-  imagePreview?: string;
-  answers: {
-    A: string;
-    B: string;
-    C: string;
-    D: string;
-  };
-  correctAnswer: 'A' | 'B' | 'C' | 'D';
 }
 
 interface AddContentDialogProps {
@@ -102,12 +89,16 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   // Quiz-specific state
   const [quizMethod, setQuizMethod] = useState<'ai' | 'upload' | 'manual'>('ai');
   const [aiPrompt, setAiPrompt] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<Question>({
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<Partial<QuizQuestion>>({
     id: '',
-    text: '',
-    answers: { A: '', B: '', C: '', D: '' },
-    correctAnswer: 'A'
+    question_text: '',
+    answer_a: '',
+    answer_b: '',
+    answer_c: '',
+    answer_d: '',
+    correct_answer: 'A',
+    points: 1
   });
 
   // Load subjects when dialog opens
@@ -256,13 +247,15 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         } else if (quizMethod === 'manual') {
           quizData = {
             method: 'manual',
-            questions: questions.map(q => ({
-              id: q.id,
-              text: q.text,
-              image: q.imagePreview || null,
-              answers: q.answers,
-              correctAnswer: q.correctAnswer
-            }))
+            totalQuestions: questions.length,
+            totalPoints: questions.reduce((sum, q) => sum + (q.points || 1), 0),
+            hasImages: questions.some(q => 
+              q.question_image_url || 
+              q.answer_a_image_url || 
+              q.answer_b_image_url || 
+              q.answer_c_image_url || 
+              q.answer_d_image_url
+            )
           };
         }
       }
@@ -282,6 +275,14 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         quiz_data: quizData,
         created_by: user?.id,
       });
+
+      // If manual quiz, create the questions in the database
+      if (formData.type === 'quiz' && quizMethod === 'manual' && questions.length > 0) {
+        await quizOperations.createQuestionsFromData(newContent.id, questions.map(q => ({
+          ...q,
+          content_id: newContent.id
+        })));
+      }
 
       setUploadProgress(100);
 
@@ -323,9 +324,13 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setQuestions([]);
     setCurrentQuestion({
       id: '',
-      text: '',
-      answers: { A: '', B: '', C: '', D: '' },
-      correctAnswer: 'A'
+      question_text: '',
+      answer_a: '',
+      answer_b: '',
+      answer_c: '',
+      answer_d: '',
+      correct_answer: 'A',
+      points: 1
     });
     setError(null);
     setUploadProgress(0);
@@ -382,22 +387,30 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
 
   // Quiz question management
   const addQuestion = () => {
-    if (!currentQuestion.text.trim() || !currentQuestion.answers.A.trim() || !currentQuestion.answers.B.trim()) {
+    if (!currentQuestion.question_text?.trim() || !currentQuestion.answer_a?.trim() || !currentQuestion.answer_b?.trim()) {
       setError('Please fill in the question text and at least two answers');
       return;
     }
 
-    const newQuestion: Question = {
+    const newQuestion: QuizQuestion = {
       ...currentQuestion,
-      id: `q-${Date.now()}`
-    };
+      id: `q-${Date.now()}`,
+      content_id: '',
+      order_number: questions.length + 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as QuizQuestion;
 
     setQuestions(prev => [...prev, newQuestion]);
     setCurrentQuestion({
       id: '',
-      text: '',
-      answers: { A: '', B: '', C: '', D: '' },
-      correctAnswer: 'A'
+      question_text: '',
+      answer_a: '',
+      answer_b: '',
+      answer_c: '',
+      answer_d: '',
+      correct_answer: 'A',
+      points: 1
     });
     setError(null);
   };
@@ -406,7 +419,7 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setQuestions(prev => prev.filter(q => q.id !== questionId));
   };
 
-  const handleQuestionImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQuestionImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       // Validate image file
@@ -423,25 +436,121 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
+      try {
+        // Upload image using quiz operations
+        const imageUrl = await quizOperations.uploadQuizImage(file, `temp-${Date.now()}`, 'question');
         setCurrentQuestion(prev => ({
           ...prev,
-          image: file,
-          imagePreview: e.target?.result as string
+          question_image_url: imageUrl
         }));
-      };
-      reader.readAsDataURL(file);
-      setError(null);
+        setError(null);
+      } catch (error: any) {
+        console.error('Error uploading question image:', error);
+        setError(error.message || 'Failed to upload image');
+      }
     }
   };
 
-  const removeQuestionImage = () => {
+  const removeQuestionImage = async () => {
+    if (currentQuestion.question_image_url) {
+      try {
+        await quizOperations.deleteQuizImage(currentQuestion.question_image_url);
+      } catch (error) {
+        console.warn('Failed to delete image:', error);
+      }
+    }
     setCurrentQuestion(prev => ({
       ...prev,
-      image: undefined,
-      imagePreview: undefined
+      question_image_url: undefined
     }));
+  };
+
+  const handleAnswerImageChange = async (e: React.ChangeEvent<HTMLInputElement>, answerKey: 'A' | 'B' | 'C' | 'D') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const imageUrl = await quizOperations.uploadQuizImage(file, `temp-${Date.now()}`, `answer_${answerKey.toLowerCase()}` as any);
+        setCurrentQuestion(prev => ({
+          ...prev,
+          [`answer_${answerKey.toLowerCase()}_image_url`]: imageUrl
+        }));
+        setError(null);
+      } catch (error: any) {
+        console.error('Error uploading answer image:', error);
+        setError(error.message || 'Failed to upload image');
+      }
+    }
+  };
+
+  const removeAnswerImage = async (answerKey: 'A' | 'B' | 'C' | 'D') => {
+    const imageUrlKey = `answer_${answerKey.toLowerCase()}_image_url` as keyof typeof currentQuestion;
+    const imageUrl = currentQuestion[imageUrlKey] as string;
+    
+    if (imageUrl) {
+      try {
+        await quizOperations.deleteQuizImage(imageUrl);
+      } catch (error) {
+        console.warn('Failed to delete image:', error);
+      }
+    }
+    
+    setCurrentQuestion(prev => ({
+      ...prev,
+      [imageUrlKey]: undefined
+    }));
+  };
+
+  const renderAnswerImageUpload = (answerKey: 'A' | 'B' | 'C' | 'D') => {
+    const imageUrlKey = `answer_${answerKey.toLowerCase()}_image_url` as keyof typeof currentQuestion;
+    const hasImage = !!currentQuestion[imageUrlKey];
+
+    return (
+      <div className="mt-2">
+        <Label className="text-xs">Answer {answerKey} Image (Optional)</Label>
+        <div className="border border-dashed border-gray-300 rounded p-2 text-center">
+          {hasImage ? (
+            <div className="space-y-2">
+              <img 
+                src={currentQuestion[imageUrlKey] as string} 
+                alt={`Answer ${answerKey}`}
+                className="max-w-full max-h-20 object-contain mx-auto rounded border"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => removeAnswerImage(answerKey)}
+                disabled={loading}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Input
+                type="file"
+                onChange={(e) => handleAnswerImageChange(e, answerKey)}
+                accept=".jpg,.jpeg,.png,.gif,.webp"
+                className="hidden"
+                id={`answer-${answerKey}-image`}
+                disabled={loading}
+              />
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => document.getElementById(`answer-${answerKey}-image`)?.click()}
+                disabled={loading}
+              >
+                <Upload className="h-3 w-3 mr-1" />
+                Add Image
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -734,366 +843,4 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
             <div className="space-y-4">
               <Label className="text-base font-semibold">Quiz Creation Method</Label>
               
-              <Tabs value={quizMethod} onValueChange={(value) => setQuizMethod(value as 'ai' | 'upload' | 'manual')}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="ai">AI Generated</TabsTrigger>
-                  <TabsTrigger value="upload">Upload PDF</TabsTrigger>
-                  <TabsTrigger value="manual">Manual Creation</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="ai" className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">AI Quiz Generation</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <Label htmlFor="aiPrompt">Describe the quiz you want to create</Label>
-                        <Textarea
-                          id="aiPrompt"
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                          placeholder="e.g., Create a 10-question multiple choice quiz about photosynthesis for O-Level students. Include questions about the process, reactants, products, and importance of photosynthesis."
-                          rows={4}
-                          disabled={loading}
-                        />
-                        <p className="text-xs text-gray-500">
-                          Be specific about the topic, difficulty level, number of questions, and any particular areas to focus on.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="upload" className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Upload Quiz PDF</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <FileText className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">
-                          Upload a PDF containing quiz questions and exercises
-                        </p>
-                        <Input
-                          type="file"
-                          onChange={handleFileChange}
-                          accept=".pdf"
-                          className="hidden"
-                          id="quiz-pdf-file"
-                          disabled={loading}
-                        />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => document.getElementById('quiz-pdf-file')?.click()}
-                          disabled={loading}
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Choose PDF File
-                        </Button>
-                        {formData.file && (
-                          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm font-medium text-gray-900">
-                              Selected: {formData.file.name}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Size: {(formData.file.size / (1024 * 1024)).toFixed(2)} MB
-                            </p>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={removeFile}
-                              className="mt-2"
-                              disabled={loading}
-                            >
-                              <X className="h-3 w-3 mr-1" />
-                              Remove
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="manual" className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Manual Quiz Creation</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Existing Questions */}
-                      {questions.length > 0 && (
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium">Questions ({questions.length})</Label>
-                          {questions.map((question, index) => (
-                            <Card key={question.id} className="border-l-4 border-l-primary">
-                              <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                  <span className="font-medium text-sm">Question {index + 1}</span>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeQuestion(question.id)}
-                                    disabled={loading}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                <p className="text-sm mb-2">{question.text}</p>
-                                {question.imagePreview && (
-                                  <img 
-                                    src={question.imagePreview} 
-                                    alt="Question" 
-                                    className="max-w-xs max-h-32 object-contain mb-2 rounded border"
-                                  />
-                                )}
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                  {Object.entries(question.answers).map(([key, value]) => (
-                                    <div 
-                                      key={key} 
-                                      className={`p-2 rounded ${question.correctAnswer === key ? 'bg-green-100 text-green-800' : 'bg-gray-100'}`}
-                                    >
-                                      <strong>{key}:</strong> {value}
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Add New Question */}
-                      <Card className="border-dashed">
-                        <CardHeader>
-                          <CardTitle className="text-sm">Add New Question</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="questionText">Question Text *</Label>
-                            <Textarea
-                              id="questionText"
-                              value={currentQuestion.text}
-                              onChange={(e) => setCurrentQuestion(prev => ({ ...prev, text: e.target.value }))}
-                              placeholder="Enter your question here..."
-                              rows={2}
-                              disabled={loading}
-                            />
-                          </div>
-
-                          {/* Question Image Upload */}
-                          <div className="space-y-2">
-                            <Label>Question Image (Optional)</Label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                              {currentQuestion.imagePreview ? (
-                                <div className="space-y-2">
-                                  <img 
-                                    src={currentQuestion.imagePreview} 
-                                    alt="Question preview" 
-                                    className="max-w-full max-h-32 object-contain mx-auto rounded border"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={removeQuestionImage}
-                                    disabled={loading}
-                                  >
-                                    <X className="h-4 w-4 mr-1" />
-                                    Remove Image
-                                  </Button>
-                                </div>
-                              ) : (
-                                <>
-                                  <ImageIcon className="h-6 w-6 mx-auto text-gray-400 mb-2" />
-                                  <p className="text-xs text-gray-600 mb-2">Upload an image for this question</p>
-                                  <Input
-                                    type="file"
-                                    onChange={handleQuestionImageChange}
-                                    accept=".jpg,.jpeg,.png,.gif,.webp"
-                                    className="hidden"
-                                    id="question-image"
-                                    disabled={loading}
-                                  />
-                                  <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => document.getElementById('question-image')?.click()}
-                                    disabled={loading}
-                                  >
-                                    <Upload className="h-4 w-4 mr-2" />
-                                    Choose Image
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Answer Options */}
-                          <div className="space-y-3">
-                            <Label>Answer Options *</Label>
-                            {(['A', 'B', 'C', 'D'] as const).map((option) => (
-                              <div key={option} className="flex items-center space-x-2">
-                                <input
-                                  type="radio"
-                                  id={`correct-${option}`}
-                                  name="correctAnswer"
-                                  checked={currentQuestion.correctAnswer === option}
-                                  onChange={() => setCurrentQuestion(prev => ({ ...prev, correctAnswer: option }))}
-                                  disabled={loading}
-                                />
-                                <Label htmlFor={`correct-${option}`} className="text-sm font-medium min-w-[20px]">
-                                  {option}:
-                                </Label>
-                                <Input
-                                  value={currentQuestion.answers[option]}
-                                  onChange={(e) => setCurrentQuestion(prev => ({
-                                    ...prev,
-                                    answers: { ...prev.answers, [option]: e.target.value }
-                                  }))}
-                                  placeholder={`Answer ${option}`}
-                                  className="flex-1"
-                                  disabled={loading}
-                                />
-                              </div>
-                            ))}
-                            <p className="text-xs text-gray-500">Select the radio button next to the correct answer</p>
-                          </div>
-
-                          <Button 
-                            type="button" 
-                            onClick={addQuestion} 
-                            className="w-full"
-                            disabled={!currentQuestion.text.trim() || !currentQuestion.answers.A.trim() || !currentQuestion.answers.B.trim() || loading}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Question
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : (
-            /* File Upload for Non-Quiz Content */
-            <div className="space-y-2">
-              <Label htmlFor="file">Upload Content File</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                {getSelectedContentType() && (
-                  <div className="mb-4">
-                    {React.createElement(getSelectedContentType()!.icon, { 
-                      className: "h-12 w-12 mx-auto text-gray-400 mb-2" 
-                    })}
-                    <p className="text-sm text-gray-600 mb-2">
-                      Upload {getSelectedContentType()!.label.toLowerCase()}
-                    </p>
-                    <p className="text-xs text-gray-500 mb-4">
-                      Accepted formats: {getSelectedContentType()!.accept}
-                    </p>
-                    {formData.type && (
-                      <p className="text-xs text-gray-500 mb-4">
-                        Max size: {storageOperations.getFileTypeConfig(formData.type).maxSizeMB}MB
-                      </p>
-                    )}
-                  </div>
-                )}
-                
-                <Input
-                  id="file"
-                  type="file"
-                  onChange={handleFileChange}
-                  accept={getSelectedContentType()?.accept || '*'}
-                  className="hidden"
-                  disabled={loading}
-                />
-                
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => document.getElementById('file')?.click()}
-                  disabled={loading || !formData.type}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Choose File
-                </Button>
-                
-                {!formData.type && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Please select a content type first
-                  </p>
-                )}
-                
-                {formData.file && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900">
-                      Selected: {formData.file.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Size: {(formData.file.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={removeFile}
-                      className="mt-2"
-                      disabled={loading}
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Remove
-                    </Button>
-                  </div>
-                )}
-
-                {/* Upload Progress */}
-                {uploadProgress > 0 && uploadProgress < 100 && (
-                  <div className="mt-4">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-primary h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">Uploading... {uploadProgress}%</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end space-x-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit"
-              disabled={!formData.title || !formData.type || (!formData.chapterId && !isNewChapter) || loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : 'Creating...'}
-                </>
-              ) : (
-                'Add Content'
-              )}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+              
