@@ -32,10 +32,10 @@ interface Question {
   image?: File;
   imagePreview?: string;
   answers: {
-    A: { text: string; image?: File; imagePreview?: string };
-    B: { text: string; image?: File; imagePreview?: string };
-    C: { text: string; image?: File; imagePreview?: string };
-    D: { text: string; image?: File; imagePreview?: string };
+    A: string;
+    B: string;
+    C: string;
+    D: string;
   };
   correctAnswer: 'A' | 'B' | 'C' | 'D';
 }
@@ -76,10 +76,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
   const [currentQuestion, setCurrentQuestion] = useState<Question>({
     id: '',
     text: '',
-    answers: { 
-      A: { text: '' }, B: { text: '' }, 
-      C: { text: '' }, D: { text: '' } 
-    },
+    answers: { A: '', B: '', C: '', D: '' },
     correctAnswer: 'A'
   });
 
@@ -144,11 +141,13 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
         } else if (quizMethod === 'manual') {
           quizData = {
             method: 'manual',
-            totalQuestions: questions.length,
-            hasImages: questions.some(q => 
-              q.imagePreview || 
-              Object.values(q.answers).some(a => a.imagePreview)
-            )
+            questions: questions.map(q => ({
+              id: q.id,
+              text: q.text,
+              image: q.imagePreview || null,
+              answers: q.answers,
+              correctAnswer: q.correctAnswer
+            }))
           };
         }
       }
@@ -196,10 +195,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
     setCurrentQuestion({
       id: '',
       text: '',
-      answers: { 
-        A: { text: '' }, B: { text: '' }, 
-        C: { text: '' }, D: { text: '' } 
-      },
+      answers: { A: '', B: '', C: '', D: '' },
       correctAnswer: 'A'
     });
     setError(null);
@@ -257,7 +253,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
 
   // Quiz question management
   const addQuestion = () => {
-    if (!currentQuestion.text.trim() || !currentQuestion.answers.A.text.trim() || !currentQuestion.answers.B.text.trim()) {
+    if (!currentQuestion.text.trim() || !currentQuestion.answers.A.trim() || !currentQuestion.answers.B.trim()) {
       setError('Please fill in the question text and at least two answers');
       return;
     }
@@ -271,10 +267,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
     setCurrentQuestion({
       id: '',
       text: '',
-      answers: { 
-        A: { text: '' }, B: { text: '' }, 
-        C: { text: '' }, D: { text: '' } 
-      },
+      answers: { A: '', B: '', C: '', D: '' },
       correctAnswer: 'A'
     });
     setError(null);
@@ -319,56 +312,6 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
       ...prev,
       image: undefined,
       imagePreview: undefined
-    }));
-  };
-
-  const handleAnswerImageChange = (answerKey: 'A' | 'B' | 'C' | 'D', e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate image file
-      const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      
-      if (!fileExt || !allowedTypes.includes(fileExt)) {
-        setError('Please select a valid image file (JPG, PNG, GIF, WebP)');
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setError('Image file size must be less than 5MB');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setCurrentQuestion(prev => ({
-          ...prev,
-          answers: {
-            ...prev.answers,
-            [answerKey]: {
-              ...prev.answers[answerKey],
-              image: file,
-              imagePreview: e.target?.result as string
-            }
-          }
-        }));
-      };
-      reader.readAsDataURL(file);
-      setError(null);
-    }
-  };
-
-  const removeAnswerImage = (answerKey: 'A' | 'B' | 'C' | 'D') => {
-    setCurrentQuestion(prev => ({
-      ...prev,
-      answers: {
-        ...prev.answers,
-        [answerKey]: {
-          ...prev.answers[answerKey],
-          image: undefined,
-          imagePreview: undefined
-        }
-      }
     }));
   };
 
@@ -635,19 +578,12 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
                                       />
                                     )}
                                     <div className="grid grid-cols-2 gap-2 text-xs">
-                                      {Object.entries(question.answers).map(([key, answerData]) => (
+                                      {Object.entries(question.answers).map(([key, value]) => (
                                         <div 
                                           key={key} 
                                           className={`p-2 rounded ${question.correctAnswer === key ? 'bg-green-100 text-green-800' : 'bg-gray-100'}`}
                                         >
-                                          <strong>{key}:</strong> {answerData.text}
-                                          {answerData.imagePreview && (
-                                            <img 
-                                              src={answerData.imagePreview} 
-                                              alt={`Answer ${key}`} 
-                                              className="max-w-full max-h-16 object-contain mt-1 rounded border"
-                                            />
-                                          )}
+                                          <strong>{key}:</strong> {value}
                                         </div>
                                       ))}
                                     </div>
@@ -728,8 +664,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
                               <div className="space-y-3">
                                 <Label>Answer Options *</Label>
                                 {(['A', 'B', 'C', 'D'] as const).map((option) => (
-                                  <div key={option} className="space-y-2 p-3 border rounded-lg">
-                                    <div className="flex items-center space-x-2">
+                                  <div key={option} className="flex items-center space-x-2">
                                     <input
                                       type="radio"
                                       id={`correct-${option}`}
@@ -742,67 +677,15 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
                                       {option}:
                                     </Label>
                                     <Input
-                                      value={currentQuestion.answers[option].text}
+                                      value={currentQuestion.answers[option]}
                                       onChange={(e) => setCurrentQuestion(prev => ({
                                         ...prev,
-                                        answers: { 
-                                          ...prev.answers, 
-                                          [option]: { ...prev.answers[option], text: e.target.value } 
-                                        }
+                                        answers: { ...prev.answers, [option]: e.target.value }
                                       }))}
                                       placeholder={`Answer ${option}`}
                                       className="flex-1"
                                       disabled={loading}
                                     />
-                                    </div>
-                                    
-                                    {/* Answer Image Upload */}
-                                    <div className="ml-6">
-                                      <Label className="text-xs text-gray-600">Answer Image (Optional)</Label>
-                                      <div className="border border-dashed border-gray-200 rounded p-2 mt-1">
-                                        {currentQuestion.answers[option].imagePreview ? (
-                                          <div className="space-y-2">
-                                            <img 
-                                              src={currentQuestion.answers[option].imagePreview} 
-                                              alt={`Answer ${option} preview`} 
-                                              className="max-w-full max-h-20 object-contain rounded border"
-                                            />
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => removeAnswerImage(option)}
-                                              disabled={loading}
-                                            >
-                                              <X className="h-3 w-3 mr-1" />
-                                              Remove
-                                            </Button>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <Input
-                                              type="file"
-                                              onChange={(e) => handleAnswerImageChange(option, e)}
-                                              accept=".jpg,.jpeg,.png,.gif,.webp"
-                                              className="hidden"
-                                              id={`answer-${option}-image`}
-                                              disabled={loading}
-                                            />
-                                            <Button 
-                                              type="button" 
-                                              variant="outline" 
-                                              size="sm"
-                                              onClick={() => document.getElementById(`answer-${option}-image`)?.click()}
-                                              disabled={loading}
-                                              className="w-full"
-                                            >
-                                              <Upload className="h-3 w-3 mr-1" />
-                                              Add Image
-                                            </Button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
                                   </div>
                                 ))}
                                 <p className="text-xs text-gray-500">Select the radio button next to the correct answer</p>
@@ -812,7 +695,7 @@ export function AddHierarchyItemDialog({ open, onOpenChange, type, onAdd }: AddH
                                 type="button" 
                                 onClick={addQuestion} 
                                 className="w-full"
-                                disabled={!currentQuestion.text.trim() || !currentQuestion.answers.A.text.trim() || !currentQuestion.answers.B.text.trim() || loading}
+                                disabled={!currentQuestion.text.trim() || !currentQuestion.answers.A.trim() || !currentQuestion.answers.B.trim() || loading}
                               >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Question
