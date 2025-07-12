@@ -1,6 +1,6 @@
 'use client';
 
-import React,{ useState, useEffect, useRef } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { storageOperations } from '@/lib/storage';
 import { contentOperations, subjectOperations } from '@/lib/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -105,7 +105,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
   const [quizMethod, setQuizMethod] = useState<'ai' | 'upload' | 'manual'>('ai');
   const [aiPrompt, setAiPrompt] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
-  const questionsRef = useRef<Question[]>([]); // Ref to track questions reliably
   const [currentQuestion, setCurrentQuestion] = useState<Question>({
     id: '',
     text: '',
@@ -115,11 +114,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     },
     correctAnswer: 'A'
   });
-
-  // Sync ref with state
-  useEffect(() => {
-    questionsRef.current = questions;
-  }, [questions]);
 
   // Load subjects when dialog opens
   useEffect(() => {
@@ -259,57 +253,21 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
           quizData = {
             method: 'ai',
             prompt: aiPrompt,
-            generated: false, // Will be processed later
-            questions: [],
-            totalQuestions: 0,
-            hasImages: false
+            generated: false // Will be processed later
           };
         } else if (quizMethod === 'upload') {
           quizData = {
             method: 'upload',
-            fileUrl: fileUrl,
-            questions: [],
-            totalQuestions: 0,
-            hasImages: false
+            fileUrl: fileUrl
           };
         } else if (quizMethod === 'manual') {
-          // Use the ref to get current questions reliably
-          const currentQuestions = questionsRef.current;
-          
-          // Process questions to include in quiz_data
-          const processedQuestions = currentQuestions.map((question, index) => ({
-            id: question.id,
-            text: question.text,
-            imageUrl: question.imagePreview ? '' : undefined, // Will be updated after image upload
-            answers: {
-              A: {
-                text: question.answers.A.text,
-                imageUrl: question.answers.A.imagePreview ? '' : undefined
-              },
-              B: {
-                text: question.answers.B.text,
-                imageUrl: question.answers.B.imagePreview ? '' : undefined
-              },
-              C: question.answers.C.text ? {
-                text: question.answers.C.text,
-                imageUrl: question.answers.C.imagePreview ? '' : undefined
-              } : undefined,
-              D: question.answers.D.text ? {
-                text: question.answers.D.text,
-                imageUrl: question.answers.D.imagePreview ? '' : undefined
-              } : undefined
-            },
-            correctAnswer: question.correctAnswer,
-            orderNumber: index + 1
-          }));
-
           quizData = {
             method: 'manual',
-            questions: processedQuestions,
-            totalQuestions: currentQuestions.length,
-            hasImages: currentQuestions.some(q => 
+            totalQuestions: questions.length,
+            hasImages: questions.some(q => 
               q.imagePreview || 
               Object.values(q.answers).some(a => a.imagePreview)
+            )
           };
         }
       }
@@ -333,12 +291,11 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
       });
 
       // Handle manual quiz questions with image uploads
-      if (formData.type === 'quiz' && quizMethod === 'manual' && questionsRef.current.length > 0) {
+      if (formData.type === 'quiz' && quizMethod === 'manual' && questions.length > 0) {
         const questionsToCreate = [];
-        const updatedQuestions = [...(quizData?.questions || [])];
 
-        for (let i = 0; i < questionsRef.current.length; i++) {
-          const question = questionsRef.current[i];
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
           let questionImageUrl = '';
           const answerImageUrls = { A: '', B: '', C: '', D: '' };
 
@@ -352,10 +309,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                 i.toString()
               );
               questionImageUrl = uploadResult.url;
-              // Update the quiz_data with the actual image URL
-              if (updatedQuestions[i]) {
-                updatedQuestions[i].imageUrl = questionImageUrl;
-              }
             } catch (uploadError) {
               console.warn('Failed to upload question image:', uploadError);
             }
@@ -373,55 +326,30 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
                   answerKey
                 );
                 answerImageUrls[answerKey as keyof typeof answerImageUrls] = uploadResult.url;
-                // Update the quiz_data with the actual image URL
-                if (updatedQuestions[i] && updatedQuestions[i].answers[answerKey as 'A' | 'B' | 'C' | 'D']) {
-                  updatedQuestions[i].answers[answerKey as 'A' | 'B' | 'C' | 'D']!.imageUrl = uploadResult.url;
-                }
               } catch (uploadError) {
                 console.warn(`Failed to upload answer ${answerKey} image:`, uploadError);
               }
             }
           }
 
-          // Add processed question to the array
           questionsToCreate.push({
-            id: question.id,
-            text: question.text,
-            imageUrl: questionImageUrl || null,
-            answers: {
-              A: {
-                text: question.answers.A.text,
-                imageUrl: answerImageUrls.A || null
-              },
-              B: {
-                text: question.answers.B.text,
-                imageUrl: answerImageUrls.B || null
-              },
-              C: {
-                text: question.answers.C.text || null,
-                imageUrl: answerImageUrls.C || null
-              },
-              D: {
-                text: question.answers.D.text || null,
-                imageUrl: answerImageUrls.D || null
-              }
-            },
-            correctAnswer: question.correctAnswer
+            questionText: question.text,
+            questionImageUrl: questionImageUrl || undefined,
+            answerA: question.answers.A.text,
+            answerB: question.answers.B.text,
+            answerC: question.answers.C.text || undefined,
+            answerD: question.answers.D.text || undefined,
+            answerAImageUrl: answerImageUrls.A || undefined,
+            answerBImageUrl: answerImageUrls.B || undefined,
+            answerCImageUrl: answerImageUrls.C || undefined,
+            answerDImageUrl: answerImageUrls.D || undefined,
+            correctAnswer: question.correctAnswer,
+            orderNumber: i + 1,
           });
         }
 
         // Create all quiz questions
         await contentOperations.createQuizQuestions(createdContent.id, questionsToCreate);
-
-        // Update the content record with the complete quiz_data including image URLs
-        const updatedQuizData = {
-          ...quizData,
-          questions: updatedQuestions
-        };
-
-        await contentOperations.updateContent(createdContent.id, {
-          quiz_data: updatedQuizData
-        });
       }
 
       setUploadProgress(100);
@@ -462,7 +390,6 @@ export function AddContentDialog({ trigger, onContentAdded, subjects: propSubjec
     setQuizMethod('ai');
     setAiPrompt('');
     setQuestions([]);
-    questionsRef.current = [];
     setCurrentQuestion({
       id: '',
       text: '',
